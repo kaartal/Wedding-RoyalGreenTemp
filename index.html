@@ -1419,8 +1419,6 @@ body.loader-active {
 </style>
 <script id="_musicgate">
 (function () {
-  // Muzika postaje čujna tek kad video stvarno krene.
-  // Na dodir se muzika pokrene tiho (da je telefon dopusti), a zvuk se uključuje kad video krene.
   var gateOpen = false, held = [], openResolve;
   var gateDone = new Promise(function (r) { openResolve = r; });
   var origPlay = HTMLMediaElement.prototype.play;
@@ -1901,12 +1899,10 @@ pointer-events: none;" />
     if (bar) bar.style.width = '100%';
     pl.classList.add('hidden');
   }
-  // Spremnost videa otvaranja: javlja je kod koji ga skida (envIsReady)
   let envResolve;
   const envReady = new Promise(res => { envResolve = res; });
   window.__envReadyResolve = envResolve;
 
-  // Traka napreduje polako dok se čeka
   let w = 12;
   if (bar) bar.style.width = w + '%';
   const barTimer = setInterval(() => {
@@ -1915,7 +1911,6 @@ pointer-events: none;" />
     if (bar) bar.style.width = w + '%';
   }, 300);
 
-  // Loader čeka naslovnu sliku, fontove (max 1s) i video otvaranja, da na dodir krene odmah
   const imgReady = new Promise(res => {
     if (cover.complete) return res();
     cover.addEventListener('load', res, { once: true });
@@ -1926,7 +1921,7 @@ pointer-events: none;" />
     new Promise(res => setTimeout(res, 1000))
   ]);
   Promise.all([imgReady, fontsReady, envReady]).then(finishLoader);
-  setTimeout(finishLoader, 12000); // sigurnosni limit: loader nikad ne traje duže od 12s
+  setTimeout(finishLoader, 12000);
 })();
 
 document.body.classList.add('loader-active');
@@ -1938,10 +1933,9 @@ const heroVid      = document.getElementById('heroVid');
 function warm(v) { try { v.preload = 'auto'; v.load(); } catch (e) {} }
 let warmedEnv = false, warmedHero = false;
 function loadAsBlob(v, url, done, onFail) {
-  // Video se skida cijeli u memoriju unaprijed, pa na dodir kreće odmah (i na iPhoneu, koji ignoriše preload)
   fetch(url).then(r => { if (!r.ok) throw new Error('http'); return r.blob(); })
     .then(b => {
-      if (opened) { if (done) done(); return; }   // gost je već dodirnuo: ne mijenjaj izvor usred reprodukcije
+      if (opened) { if (done) done(); return; }
       v.preload = 'auto';
       v.src = URL.createObjectURL(b);
       v.load();
@@ -1965,7 +1959,6 @@ function warmEnv() {
   video.addEventListener('canplaythrough', envIsReady, { once: true });
   video.addEventListener('canplay', envIsReady, { once: true });
   video.addEventListener('loadeddata', envIsReady, { once: true });
-  // video je već u memoriji (blob) — telefon ga može pokrenuti odmah čak i ako ne javi 'canplay'
   loadAsBlob(video, video.getAttribute('src'), () => { warmHero(); setTimeout(envIsReady, 800); }, envIsReady);
   setTimeout(warmHero, 3500);
 }
@@ -2031,7 +2024,6 @@ loader.addEventListener('click', () => {
     }, fade ? 650 : 0);
   }
 
-  // muzika + dugmad (dugmad se prikazuju čak i ako telefon blokira zvuk)
   bgMusic.play().then(() => fadeInMusic(3000)).catch(() => setMutedUI(true));
   setTimeout(() => {
     musicToggle.classList.add('visible');
@@ -2048,7 +2040,6 @@ loader.addEventListener('click', () => {
     video.style.transition = 'opacity 0.6s ease';
     video.style.opacity    = '1';
     setTimeout(() => { img.style.opacity = '0'; }, 300);
-    // Video otvaranja se povlači tek kad je hero spreman, da se hero odmah vidi (max 5s čekanja)
     setTimeout(() => {
       whenHeroReady(() => {
         video.style.transition = 'opacity 1s ease, filter 1s ease';
@@ -2059,7 +2050,6 @@ loader.addEventListener('click', () => {
     }, 1400);
   }, { once: true });
 
-  // Ako se video ne pokrene (spor internet, štednja baterije, greška) — svejedno otvori pozivnicu
   video.addEventListener('error', () => closeLoader(true), { once: true });
   video.play().catch(() => closeLoader(true));
   setTimeout(() => { if (!started) closeLoader(true); }, 7000);
