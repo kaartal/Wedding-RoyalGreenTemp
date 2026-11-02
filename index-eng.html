@@ -1844,12 +1844,31 @@ const video        = document.getElementById('envelopeVideo');
 const heroVid      = document.getElementById('heroVid');
 function warm(v) { try { v.preload = 'auto'; v.load(); } catch (e) {} }
 let warmedEnv = false, warmedHero = false;
-function warmHero() { if (warmedHero) return; warmedHero = true; warm(heroVid); }
+function loadAsBlob(v, url, done) {
+  // Video se skida cijeli u memoriju unaprijed, pa na dodir kreće odmah (i na iPhoneu, koji ignoriše preload)
+  fetch(url).then(r => { if (!r.ok) throw new Error('http'); return r.blob(); })
+    .then(b => {
+      if (opened) { if (done) done(); return; }   // gost je već dodirnuo: ne mijenjaj izvor usred reprodukcije
+      v.src = URL.createObjectURL(b);
+      v.load();
+      if (done) done();
+    })
+    .catch(() => { warm(v); if (done) done(); });
+}
+function warmHero() {
+  if (warmedHero) return; warmedHero = true;
+  const s = heroVid.querySelector('source');
+  loadAsBlob(heroVid, s ? s.getAttribute('src') : heroVid.getAttribute('src'));
+}
+function heroReady() { return !heroVid || heroVid.readyState >= 3 || heroVid.networkState === 3; }
+function whenHeroReady(cb, maxMs) {
+  const t0 = Date.now();
+  (function chk() { if (heroReady() || Date.now() - t0 > maxMs) cb(); else setTimeout(chk, 100); })();
+}
 function warmEnv() {
   if (warmedEnv) return; warmedEnv = true;
-  warm(video);
-  video.addEventListener('canplaythrough', warmHero, { once: true });
-  setTimeout(warmHero, 2500);
+  loadAsBlob(video, video.getAttribute('src'), warmHero);
+  setTimeout(warmHero, 3500);
 }
 if (img.complete) warmEnv();
 else { img.addEventListener('load', warmEnv, { once: true }); img.addEventListener('error', warmEnv, { once: true }); }
@@ -1930,12 +1949,15 @@ loader.addEventListener('click', () => {
     video.style.transition = 'opacity 0.6s ease';
     video.style.opacity    = '1';
     setTimeout(() => { img.style.opacity = '0'; }, 300);
+    // Video otvaranja se povlači tek kad je hero spreman, da se hero odmah vidi (max 5s čekanja)
     setTimeout(() => {
-      video.style.transition = 'opacity 1s ease, filter 1s ease';
-      video.style.opacity    = '0';
-      video.style.filter     = 'blur(20px)';
+      whenHeroReady(() => {
+        video.style.transition = 'opacity 1s ease, filter 1s ease';
+        video.style.opacity    = '0';
+        video.style.filter     = 'blur(20px)';
+        setTimeout(() => closeLoader(false), 1200);
+      }, 5000);
     }, 1400);
-    setTimeout(() => closeLoader(false), 2600);
   }, { once: true });
 
   // Ako se video ne pokrene (spor internet, štednja baterije, greška) — svejedno otvori pozivnicu
