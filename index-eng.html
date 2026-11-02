@@ -1821,8 +1821,21 @@ body.loader-active {
     if (bar) bar.style.width = '100%';
     pl.classList.add('hidden');
   }
-  if (bar) bar.style.width = '60%';
-  // Loader čeka samo naslovnu sliku i fontove (max 1s za fontove)
+  // Spremnost videa otvaranja: javlja je kod koji ga skida (envIsReady)
+  let envResolve;
+  const envReady = new Promise(res => { envResolve = res; });
+  window.__envReadyResolve = envResolve;
+
+  // Traka napreduje polako dok se čeka
+  let w = 12;
+  if (bar) bar.style.width = w + '%';
+  const barTimer = setInterval(() => {
+    if (done) return clearInterval(barTimer);
+    w += (92 - w) * 0.07;
+    if (bar) bar.style.width = w + '%';
+  }, 300);
+
+  // Loader čeka naslovnu sliku, fontove (max 1s) i video otvaranja, da na dodir krene odmah
   const imgReady = new Promise(res => {
     if (cover.complete) return res();
     cover.addEventListener('load', res, { once: true });
@@ -1832,8 +1845,8 @@ body.loader-active {
     (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve(),
     new Promise(res => setTimeout(res, 1000))
   ]);
-  Promise.all([imgReady, fontsReady]).then(finishLoader);
-  setTimeout(finishLoader, 4000); // sigurnosni limit
+  Promise.all([imgReady, fontsReady, envReady]).then(finishLoader);
+  setTimeout(finishLoader, 12000); // sigurnosni limit: loader nikad ne traje duže od 12s
 })();
 
 document.body.classList.add('loader-active');
@@ -1844,16 +1857,17 @@ const video        = document.getElementById('envelopeVideo');
 const heroVid      = document.getElementById('heroVid');
 function warm(v) { try { v.preload = 'auto'; v.load(); } catch (e) {} }
 let warmedEnv = false, warmedHero = false;
-function loadAsBlob(v, url, done) {
+function loadAsBlob(v, url, done, onFail) {
   // Video se skida cijeli u memoriju unaprijed, pa na dodir kreće odmah (i na iPhoneu, koji ignoriše preload)
   fetch(url).then(r => { if (!r.ok) throw new Error('http'); return r.blob(); })
     .then(b => {
       if (opened) { if (done) done(); return; }   // gost je već dodirnuo: ne mijenjaj izvor usred reprodukcije
+      v.preload = 'auto';
       v.src = URL.createObjectURL(b);
       v.load();
       if (done) done();
     })
-    .catch(() => { warm(v); if (done) done(); });
+    .catch(() => { warm(v); if (onFail) onFail(); if (done) done(); });
 }
 function warmHero() {
   if (warmedHero) return; warmedHero = true;
@@ -1867,7 +1881,12 @@ function whenHeroReady(cb, maxMs) {
 }
 function warmEnv() {
   if (warmedEnv) return; warmedEnv = true;
-  loadAsBlob(video, video.getAttribute('src'), warmHero);
+  const envIsReady = () => { if (window.__envReadyResolve) window.__envReadyResolve(); };
+  video.addEventListener('canplaythrough', envIsReady, { once: true });
+  video.addEventListener('canplay', envIsReady, { once: true });
+  video.addEventListener('loadeddata', envIsReady, { once: true });
+  // video je već u memoriji (blob) — telefon ga može pokrenuti odmah čak i ako ne javi 'canplay'
+  loadAsBlob(video, video.getAttribute('src'), () => { warmHero(); setTimeout(envIsReady, 800); }, envIsReady);
   setTimeout(warmHero, 3500);
 }
 if (img.complete) warmEnv();
