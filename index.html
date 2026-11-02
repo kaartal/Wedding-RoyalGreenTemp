@@ -120,7 +120,7 @@ nav {
   justify-content: space-between;
   text-align: center;
   overflow: hidden;
-  background-color: #000;
+  background: #3a4634 url("./Images/HeroPoster.jpg") center/cover no-repeat;
 }
 
 .hero-bg {
@@ -135,6 +135,7 @@ nav {
 }
 
 .hero-bg video {
+  background: transparent;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1576,7 +1577,7 @@ body.loader-active {
 
 <section id="hero">
   <div class="hero-bg" id="heroBg">
-    <video muted loop playsinline preload="none" id="heroVid">
+    <video muted loop playsinline webkit-playsinline preload="metadata" poster="./Images/HeroPoster.jpg" id="heroVid" disablepictureinpicture>
       <source src="./Images/HeroVideo.mp4" type="video/mp4">
     </video>
   </div>
@@ -1945,8 +1946,22 @@ function loadAsBlob(v, url, done, onFail) {
 }
 function warmHero() {
   if (warmedHero) return; warmedHero = true;
-  const s = heroVid.querySelector('source');
-  loadAsBlob(heroVid, s ? s.getAttribute('src') : heroVid.getAttribute('src'));
+  try { heroVid.preload = 'auto'; heroVid.load(); } catch (e) {}
+}
+function playHero() {
+  if (!heroVid) return;
+  heroVid.muted = true;
+  const p = heroVid.play();
+  if (p && p.catch) p.catch(() => {});
+}
+if (heroVid) {
+  ['loadeddata', 'canplay'].forEach(ev => heroVid.addEventListener(ev, () => { if (opened) playHero(); }));
+  heroVid.addEventListener('error', () => { heroVid.style.display = 'none'; });
+  heroVid.addEventListener('stalled', () => { if (opened) setTimeout(playHero, 800); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && opened && heroVid.paused) playHero(); });
+  ['touchstart', 'scroll', 'click'].forEach(ev =>
+    window.addEventListener(ev, () => { if (opened && heroVid.paused) playHero(); }, { passive: true }));
+  setInterval(() => { if (opened && heroVid.paused && !document.hidden) playHero(); }, 2000);
 }
 function heroReady() { return !heroVid || heroVid.readyState >= 3 || heroVid.networkState === 3; }
 function whenHeroReady(cb, maxMs) {
@@ -2011,7 +2026,7 @@ loader.addEventListener('click', () => {
   hint.style.transition = 'opacity 0.3s';
   hint.style.opacity    = '0';
 
-  if (heroVid) heroVid.play().catch(() => {});
+  playHero();
 
   let closed = false;
   function closeLoader(fade) {
