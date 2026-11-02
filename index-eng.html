@@ -40,7 +40,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Our Day</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&family=Montserrat:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="image" href="./Images/OurInv.jpg" fetchpriority="high">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&family=Montserrat:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&family=Montserrat:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet"></noscript>
 <style>
 *,
 *::before,
@@ -1414,12 +1418,70 @@ body.loader-active {
   }
 }
 </style>
+<script id="_musicgate">
+(function () {
+  // Muzika postaje čujna tek kad video stvarno krene.
+  // Na dodir se muzika pokrene tiho (da je telefon dopusti), a zvuk se uključuje kad video krene.
+  var gateOpen = false, held = [], openResolve;
+  var gateDone = new Promise(function (r) { openResolve = r; });
+  var origPlay = HTMLMediaElement.prototype.play;
+  var timerSet = false;
+
+  function ramp(el, target, ms) {
+    var steps = 30, i = 0;
+    try { el.volume = 0; } catch (e) {}
+    var t = setInterval(function () {
+      i++;
+      try { el.volume = Math.min(target, target * i / steps); } catch (e) {}
+      if (i >= steps) clearInterval(t);
+    }, ms / steps);
+  }
+  function open() {
+    if (gateOpen) return;
+    gateOpen = true;
+    held.forEach(function (el) {
+      el.muted = el._origMuted;
+      var t = el.volume;
+      if (t > 0 && !el.muted) ramp(el, t, 2200);
+    });
+    openResolve();
+  }
+  function isOpenVideo(el) { return el.id === 'envelopeVideo' || el.id === 'splash-video'; }
+
+  HTMLMediaElement.prototype.play = function () {
+    var el = this, a = arguments;
+    if (el instanceof HTMLAudioElement && !gateOpen) {
+      if (!el._gateP) el._origMuted = el.muted;
+      el.muted = true;
+      var p = origPlay.apply(el, a);
+      if (!el._gateP) {
+        el._gateP = Promise.resolve(p).then(function () { return gateDone; })
+          .catch(function (e) { el._gateP = null; throw e; });
+        held.push(el);
+        if (!timerSet) { timerSet = true; setTimeout(open, 7100); }
+      }
+      return el._gateP;
+    }
+    var r = origPlay.apply(el, a);
+    if (isOpenVideo(el) && r && r.catch) r.catch(open);
+    return r;
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var v = document.getElementById('envelopeVideo') || document.getElementById('splash-video');
+    if (!v) { open(); return; }
+    v.addEventListener('playing', open, { once: true });
+    v.addEventListener('error', open, { once: true });
+    v.addEventListener('ended', open, { once: true });
+  });
+})();
+</script>
 </head>
 <body>
 
 <div id="desktopWarning">
   <div class="dw-inner">
-    <img src="./Images/rings.png" style="width:12rem;" />
+    <img loading="lazy" decoding="async" src="./Images/rings.png" style="width:12rem;" />
     <p class="dw-title">Bilal <span>&amp;</span> Merima</p>
     <p class="dw-msg">The desktop version is currently under construction.</p>
     <p class="dw-sub">Please open the invitation on your phone.</p>
@@ -1440,8 +1502,8 @@ body.loader-active {
 </button>
 
 <div id="langToggle">
-  <a class="lang-btn" href="Index.html">BS</a>
-  <a class="lang-btn active" href="Index-eng.html">EN</a>
+  <a class="lang-btn" href="index.html">BS</a>
+  <a class="lang-btn active" href="index-eng.html">EN</a>
 </div>
 
 <div id="pageLoader">
@@ -1456,8 +1518,8 @@ body.loader-active {
 </div>
 
 <div id="envelopeLoader" style="position:fixed;inset:0;z-index:9999;cursor:pointer;background:#faf6f0;overflow:hidden;">
-  <img id="envelopeImg" src="./Images/OurInv.jpg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:1;transition:opacity 0.8s ease;z-index:2;"/>
-  <video id="envelopeVideo" src="./Images/InvOpenVideo.mp4" muted playsinline preload="auto" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;z-index:1;"></video>
+  <img id="envelopeImg" fetchpriority="high" decoding="async" src="./Images/OurInv.jpg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:1;transition:opacity 0.8s ease;z-index:2;"/>
+  <video id="envelopeVideo" src="./Images/InvOpenVideo.mp4" muted playsinline preload="none" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;z-index:1;"></video>
   <div class="env-click-hint" id="envHint">
     <p class="env-hint-text">Click to open</p>
   </div>
@@ -1489,7 +1551,7 @@ body.loader-active {
 
 <section id="hero">
   <div class="hero-bg" id="heroBg">
-    <video muted loop playsinline id="heroVid">
+    <video muted loop playsinline preload="none" id="heroVid">
       <source src="./Images/HeroVideo.mp4" type="video/mp4">
     </video>
   </div>
@@ -1511,7 +1573,7 @@ body.loader-active {
 <section id="countdown">
   <div class="countdown-overlay"></div>
   <div class="countdown-inner">
-    <img src="./Images/MBLogo.png" style="width:6rem;" />
+    <img loading="lazy" decoding="async" src="./Images/MBLogo.png" style="width:6rem;" />
     <h2 class="details-date reveal">Countdown</h2>
     <p class="countdown-subtitle reveal" style="transition-delay:0.1s">Until September 11, 2028</p>
     <div class="countdown-timer reveal" style="transition-delay:0.2s">
@@ -1536,45 +1598,45 @@ body.loader-active {
 </section>
 
 <section id="details-section">
-  <img src="./Images/ChampagneImg.png" style="width:16.5rem;" />
+  <img loading="lazy" decoding="async" src="./Images/ChampagneImg.png" style="width:16.5rem;" />
   <h2 class="details-date reveal" style="color: #5b6142;">Welcome!</h2>
   <p class="details-invite reveal" style="transition-delay:0.1s">We warmly invite you to celebrate our wedding day with us. We look forward to share this unforgettable moment with you — our dearest people.</p>
 
   <div class="polaroid-stage" id="polaroidStage">
     <div>
       <div class="polaroid-card" id="cardLeft">
-        <div class="photo"><img src="./Images/BilalMerima2.jpg" alt="Bilal & Merima"></div>
+        <div class="photo"><img loading="lazy" decoding="async" src="./Images/BilalMerima2.jpg" alt="Bilal & Merima"></div>
         <p class="caption">Forever together</p>
       </div>
     </div>
     <div class="polaroid-card" id="cardRight">
-      <div class="photo"><img src="./Images/BilalMerima1.jpg" alt="Bilal & Merima"></div>
+      <div class="photo"><img loading="lazy" decoding="async" src="./Images/BilalMerima1.jpg" alt="Bilal & Merima"></div>
       <p class="caption">Our love story</p>
     </div>
   </div>
 
   <div class="flower-left">
-    <img src="./Images/flowerDemo.png" style="width: 170px; transform: rotate(9deg);"/>
+    <img loading="lazy" decoding="async" src="./Images/flowerDemo.png" style="width: 170px; transform: rotate(9deg);"/>
   </div>
   <div class="flower-right">
-    <img src="./Images/flowerDemo.png" style="width: 170px; transform: rotate(0deg);"/>
+    <img loading="lazy" decoding="async" src="./Images/flowerDemo.png" style="width: 170px; transform: rotate(0deg);"/>
   </div>
 </section>
 
 <section id="quote">
-  <img class="cat" src="./Images/Cat.png"/>
+  <img loading="lazy" decoding="async" class="cat" src="./Images/Cat.png"/>
   <h2 class="details-date reveal" style="color: #fff;">Our story finds its place</h2>
   <p class="quote-text" id="quoteText"></p>
 </section>
 
 <section id="story">
   <div style="width:100%; padding:0px 16px;">
-    <img src="./Images/LocationInFrame.jpg" alt="Couple" style="width:100%;border-radius:.6rem;object-fit:cover;display:block;">
+    <img loading="lazy" decoding="async" src="./Images/LocationInFrame.jpg" alt="Couple" style="width:100%;border-radius:.6rem;object-fit:cover;display:block;">
   </div>
 
   <div class="story-content" id="storyContent">
-    <img src="./Images/flowerDemo.png" style="position:absolute;width:190px;bottom:-110px;left:-78px;z-index:4;" />
-    <img id="branchBottomRight" src="./Images/flowerDemo.png" style="position:absolute;width:190px;bottom:-115px;right:-90px;left:auto;z-index:4;pointer-events:none;" />
+    <img loading="lazy" decoding="async" src="./Images/flowerDemo.png" style="position:absolute;width:190px;bottom:-110px;left:-78px;z-index:4;" />
+    <img loading="lazy" decoding="async" id="branchBottomRight" src="./Images/flowerDemo.png" style="position:absolute;width:190px;bottom:-115px;right:-90px;left:auto;z-index:4;pointer-events:none;" />
     <div style="padding:24px; max-width:700px; margin:0 auto;">
       <h2 class="section-title reveal">Location</h2>
       <p class="reveal" style="transition-delay:0.1s">We'll see you at Ive Marjanovića 42E, Gornja Tuzla 75000 — the place we chose to together mark the beginning of our forever.</p>
@@ -1584,7 +1646,7 @@ body.loader-active {
 
 <section id="gallery">
   <div class="gallery-header reveal">
-    <img src="./Images/rings.png" style="width:12rem;" />
+    <img loading="lazy" decoding="async" src="./Images/rings.png" style="width:12rem;" />
     <h2 class="details-date" style="color:#5b6142;">Where we become one</h2>
     <p class="details-invite">Our wedding venue</p>
     <a href="https://www.instagram.com/vjencanjaprestige/" class="locationButton">
@@ -1594,12 +1656,12 @@ body.loader-active {
       </svg>
     </a>
   </div>
-  <div class="gallery-item tall reveal"><img src="./Images/LocationWithCloud2.jpg" style="width:100%;" alt="Moment 1"></div>
+  <div class="gallery-item tall reveal"><img loading="lazy" decoding="async" src="./Images/LocationWithCloud2.jpg" style="width:100%;" alt="Moment 1"></div>
 </section>
 
 <section style="display:flex;justify-content:center;align-items:center;background-color:#7c8264;padding-top:4rem;padding-bottom:4rem;overflow-x:clip;overflow-y:visible;">
-  <img src="./Images/flowerDemo.png" style="position:absolute;width:160px;bottom:auto;right:-65px;z-index:4;opacity:0.9;pointer-events:none;" />
-  <img src="./Images/flowerDemo.png" style="position:absolute;width:160px;bottom:auto;left:-65px;z-index:4;opacity:0.9;pointer-events:none;" />
+  <img loading="lazy" decoding="async" src="./Images/flowerDemo.png" style="position:absolute;width:160px;bottom:auto;right:-65px;z-index:4;opacity:0.9;pointer-events:none;" />
+  <img loading="lazy" decoding="async" src="./Images/flowerDemo.png" style="position:absolute;width:160px;bottom:auto;left:-65px;z-index:4;opacity:0.9;pointer-events:none;" />
   <div style="width:6rem;height:1px;background-color:#fff;"></div>
 </section>
 
@@ -1608,7 +1670,7 @@ body.loader-active {
   <p class="details-invite reveal" style="transition-delay:0.1s; margin-bottom: clamp(40px,6vw,80px);">
     Monday, September 11, 2028.
   </p>
-  <img src="./Images/people.png" style="width:100%; margin-bottom: 8px;" />
+  <img loading="lazy" decoding="async" src="./Images/people.png" style="width:100%; margin-bottom: 8px;" />
 
   <div class="tl-body">
     <div class="tl-line"></div>
@@ -1668,8 +1730,8 @@ body.loader-active {
     </div>
   </div>
 
-  <img src="./Images/Cake.png" class="cakeImage"/>
-  <img src="./Images/flowers.png" class="flowersImage" />
+  <img loading="lazy" decoding="async" src="./Images/Cake.png" class="cakeImage"/>
+  <img loading="lazy" decoding="async" src="./Images/flowers.png" class="flowersImage" />
 </section>
 
 <section id="blog">
@@ -1682,7 +1744,7 @@ body.loader-active {
       <div class="blog-item-inner">
         <div class="blog-polaroid">
           <div class="blog-photo">
-            <img src="./Images/Photo.jpg" alt="Blog post">
+            <img loading="lazy" decoding="async" src="./Images/Photo.jpg" alt="Blog post">
           </div>
           <p class="blog-caption">After the big day</p>
         </div>
@@ -1700,7 +1762,7 @@ body.loader-active {
 <section id="faq">
   <div class="faq-content">
     <div class="faqHeaderHolder">
-      <img src="./Images/transport.png" style="width: 12rem;" />
+      <img loading="lazy" decoding="async" src="./Images/transport.png" style="width: 12rem;" />
       <h2 class="details-date reveal" style="color:#5b6142;">Event Information</h2>
       <p class="details-invite reveal" style="margin-bottom:10px;transition-delay:0.1s">Questions & answers</p>
       <p class="faq-intro reveal" style="transition-delay:0.2s">Your presence at our wedding is the greatest gift. Here are a few things you should know so you don't miss a single moment.</p>
@@ -1732,7 +1794,7 @@ body.loader-active {
     </div>
   </div>
 
-  <img src="./Images/flowers.png" alt="Event details" style="width:18rem; margin:0 auto;">
+  <img loading="lazy" decoding="async" src="./Images/flowers.png" alt="Event details" style="width:18rem; margin:0 auto;">
 </section>
 
 <footer>
@@ -1749,21 +1811,29 @@ body.loader-active {
 
 <script>
 (function () {
-  const loader = document.getElementById('pageLoader');
-  const bar    = document.getElementById('plBar');
-  let progress = 0;
-  const interval = setInterval(() => {
-    progress += Math.random() * 18;
-    if (progress > 90) progress = 90;
-    bar.style.width = progress + '%';
-  }, 200);
+  const pl    = document.getElementById('pageLoader');
+  const bar   = document.getElementById('plBar');
+  const cover = document.getElementById('envelopeImg');
+  let done = false;
   function finishLoader() {
-    clearInterval(interval);
-    bar.style.width = '100%';
-    setTimeout(() => loader.classList.add('hidden'), 400);
+    if (done) return;
+    done = true;
+    if (bar) bar.style.width = '100%';
+    pl.classList.add('hidden');
   }
-  if (document.readyState === 'complete') { finishLoader(); }
-  else { window.addEventListener('load', finishLoader); }
+  if (bar) bar.style.width = '60%';
+  // Loader čeka samo naslovnu sliku i fontove (max 1s za fontove)
+  const imgReady = new Promise(res => {
+    if (cover.complete) return res();
+    cover.addEventListener('load', res, { once: true });
+    cover.addEventListener('error', res, { once: true });
+  });
+  const fontsReady = Promise.race([
+    (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve(),
+    new Promise(res => setTimeout(res, 1000))
+  ]);
+  Promise.all([imgReady, fontsReady]).then(finishLoader);
+  setTimeout(finishLoader, 4000); // sigurnosni limit
 })();
 
 document.body.classList.add('loader-active');
@@ -1772,12 +1842,24 @@ const loader       = document.getElementById('envelopeLoader');
 const img          = document.getElementById('envelopeImg');
 const video        = document.getElementById('envelopeVideo');
 const heroVid      = document.getElementById('heroVid');
+function warm(v) { try { v.preload = 'auto'; v.load(); } catch (e) {} }
+let warmedEnv = false, warmedHero = false;
+function warmHero() { if (warmedHero) return; warmedHero = true; warm(heroVid); }
+function warmEnv() {
+  if (warmedEnv) return; warmedEnv = true;
+  warm(video);
+  video.addEventListener('canplaythrough', warmHero, { once: true });
+  setTimeout(warmHero, 2500);
+}
+if (img.complete) warmEnv();
+else { img.addEventListener('load', warmEnv, { once: true }); img.addEventListener('error', warmEnv, { once: true }); }
 const musicToggle  = document.getElementById('musicToggle');
 const iconUnmuted  = document.getElementById('iconUnmuted');
 const iconMuted    = document.getElementById('iconMuted');
 
 const bgMusic  = new Audio('./Music/music.mp3');
 bgMusic.loop   = true;
+bgMusic.preload = 'none';
 bgMusic.volume = 0;
 let isMuted    = false;
 
@@ -1796,30 +1878,54 @@ function fadeInMusic(duration = 3000) {
 musicToggle.addEventListener('click', () => {
   isMuted = !isMuted;
   bgMusic.volume = isMuted ? 0 : 0.35;
+  if (!isMuted && bgMusic.paused) bgMusic.play().catch(() => {});
   iconUnmuted.style.display = isMuted ? 'none'  : 'block';
   iconMuted.style.display   = isMuted ? 'block' : 'none';
   musicToggle.classList.toggle('muted', isMuted);
 });
 
+let opened = false;
+function setMutedUI(m) {
+  isMuted = m;
+  iconUnmuted.style.display = m ? 'none'  : 'block';
+  iconMuted.style.display   = m ? 'block' : 'none';
+  musicToggle.classList.toggle('muted', m);
+}
+
 loader.addEventListener('click', () => {
+  if (opened) return;
+  opened = true;
+
   const hint = document.getElementById('envHint');
   hint.style.transition = 'opacity 0.3s';
   hint.style.opacity    = '0';
 
   if (heroVid) heroVid.play().catch(() => {});
-  video.play().catch(() => {});
 
-  bgMusic.play().then(() => {
-    fadeInMusic(3000);
+  let closed = false;
+  function closeLoader(fade) {
+    if (closed) return;
+    closed = true;
+    if (fade) { loader.style.transition = 'opacity 0.6s ease'; loader.style.opacity = '0'; }
     setTimeout(() => {
-      musicToggle.classList.add('visible');
-      document.getElementById('langToggle').classList.add('visible');
-    }, 3200);
-  }).catch(() => {});
+      loader.remove();
+      document.body.classList.remove('loader-active');
+    }, fade ? 650 : 0);
+  }
 
+  // muzika + dugmad (dugmad se prikazuju čak i ako telefon blokira zvuk)
+  bgMusic.play().then(() => fadeInMusic(3000)).catch(() => setMutedUI(true));
+  setTimeout(() => {
+    musicToggle.classList.add('visible');
+    document.getElementById('langToggle').classList.add('visible');
+  }, 3200);
+
+  let started = false;
   video.addEventListener('playing', () => {
+    if (started || closed) return;
+    started = true;
     if (window.matchMedia('(min-width: 768px)').matches) {
-      setTimeout(() => { loader.style.transition = 'opacity 1s ease'; loader.style.opacity = '0'; }, 1400);
+      setTimeout(() => { if (!closed) { loader.style.transition = 'opacity 1s ease'; loader.style.opacity = '0'; } }, 1400);
     }
     video.style.transition = 'opacity 0.6s ease';
     video.style.opacity    = '1';
@@ -1829,11 +1935,13 @@ loader.addEventListener('click', () => {
       video.style.opacity    = '0';
       video.style.filter     = 'blur(20px)';
     }, 1400);
-    setTimeout(() => {
-      loader.remove();
-      document.body.classList.remove('loader-active');
-    }, 2600);
+    setTimeout(() => closeLoader(false), 2600);
   }, { once: true });
+
+  // Ako se video ne pokrene (spor internet, štednja baterije, greška) — svejedno otvori pozivnicu
+  video.addEventListener('error', () => closeLoader(true), { once: true });
+  video.play().catch(() => closeLoader(true));
+  setTimeout(() => { if (!started) closeLoader(true); }, 7000);
 });
 
 (function() {
